@@ -6,77 +6,8 @@ from langchain_core.messages import BaseMessage
 from tradereact.agents import *
 from langgraph.prebuilt import ToolNode
 from langgraph.graph import END, StateGraph, START
-from langgraph.graph.message import add_messages
+from langgraph.graph.message import add_messages, MessagesState
 
-
-# ========== ReAct 相关数据结构 ==========
-
-class ToolCall(TypedDict):
-    """工具调用信息"""
-    tool_name: Annotated[str, "MCP 工具名称"]  # 例如: "get_stock_data", "get_indicators"
-    tool_args: Annotated[Dict[str, Any], "工具调用参数"]  # 例如: {"ticker": "AAPL", "period": "1mo"}
-    call_id: Annotated[str, "工具调用的唯一标识符"]  # 用于追踪和调试
-
-
-class ToolResult(TypedDict):
-    """工具执行结果"""
-    call_id: Annotated[str, "对应的工具调用 ID"]
-    success: Annotated[bool, "工具执行是否成功"]
-    result: Annotated[Any, "工具返回的数据"]  # 可以是字符串、字典、列表等
-    error: Annotated[Optional[str], "错误信息（如果失败）"]
-    execution_time: Annotated[float, "工具执行时间（秒）"]
-
-
-class ReActStep(TypedDict):
-    """
-    ReAct 循环中的单个步骤
-    遵循 Thought → Action → Observation 范式
-    """
-    step_id: Annotated[int, "步骤编号，从 1 开始"]
-    timestamp: Annotated[datetime, "步骤开始时间"]
-
-    # Thought: Agent 的思考过程
-    thought: Annotated[str, "Agent 的推理思考内容"]
-    # 例如: "我需要获取 AAPL 的技术指标来分析趋势"
-
-    # Action: Agent 决定执行的动作
-    action_type: Annotated[
-        Literal["tool_call", "memory_query", "finish"],
-        "动作类型"
-    ]
-    # - "tool_call": 调用外部 MCP 工具
-    # - "memory_query": 查询历史记忆
-    # - "finish": 完成当前阶段
-
-    action_detail: Annotated[Optional[ToolCall], "工具调用详情（如果是 tool_call）"]
-    memory_query: Annotated[Optional[str], "记忆查询内容（如果是 memory_query）"]
-
-    # Observation: 执行结果的观察
-    observation: Annotated[str, "对执行结果的观察和总结"]
-    # 例如: "RSI 为 65，表明股票接近超买区域"
-
-    tool_result: Annotated[Optional[ToolResult], "工具执行结果详情"]
-    memory_result: Annotated[Optional[List[Dict[str, Any]]], "记忆查询结果"]
-
-    # 是否完成当前阶段
-    is_final: Annotated[bool, "是否为当前阶段的最后一步"]
-
-
-class ReActSession(TypedDict):
-    """
-    一个完整的 ReAct 会话（对应一个阶段）
-    """
-    session_id: Annotated[str, "会话唯一标识"]
-    stage: Annotated[str, "所属阶段（research/trader）"]
-    start_time: Annotated[datetime, "会话开始时间"]
-    end_time: Annotated[Optional[datetime], "会话结束时间"]
-    steps: Annotated[List[ReActStep], "ReAct 步骤列表"]
-    total_tool_calls: Annotated[int, "总工具调用次数"]
-    success: Annotated[bool, "会话是否成功完成"]
-    final_output: Annotated[Optional[str], "最终输出结果"]
-
-
-# ========== 原有状态定义 ==========
 
 # Researcher team state
 class InvestDebateState(TypedDict):
@@ -118,9 +49,7 @@ class RiskDebateState(TypedDict):
     count: Annotated[int, "Length of the current conversation"]  # Conversation length, 发言计数器
 
 
-class AgentState(TypedDict, total=False):
-    messages: Annotated[Sequence[BaseMessage], add_messages]
-
+class AgentState(MessagesState):
     # ========== 基础信息 ==========
     company_of_interest: Annotated[str, "Company that we are interested in trading"]
     trade_date: Annotated[str, "What date we are trading at"]

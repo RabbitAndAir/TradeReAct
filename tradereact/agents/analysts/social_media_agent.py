@@ -4,10 +4,15 @@ from langgraph.types import Command
 
 from tradereact.agents.utils.agent_states import AgentState
 from tradereact.agents.utils.agent_utils import get_news
+from tradereact.agents.utils.mcp_loader import load_analyst_tools
 
 
 def create_social_media_analyst(llm: BaseChatModel):
-    tools = [get_news]
+    # Define custom tools
+    custom_tools = [get_news]
+
+    # Load custom tools + MCP tools (if configured)
+    tools = load_analyst_tools("social_media_analyst", custom_tools)
 
     def social_media_analyst_node(state: AgentState):
         current_date = state["trade_date"]
@@ -51,10 +56,7 @@ def create_social_media_analyst(llm: BaseChatModel):
 
         return Command(
             goto="analyst_supervisor",
-            update={
-                "sentiment_report": report,
-                "sender": "social_node",
-            }
+            update={"sentiment_report": report}
         )
 
     return social_media_analyst_node

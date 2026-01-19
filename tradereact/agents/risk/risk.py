@@ -35,17 +35,16 @@ def create_risk_node(quick_thinking_llm: BaseChatModel, deep_thinking_llm: BaseC
     export_graph(risk_graph, name="risk_subgraph")
 
     def risk_team_node(state: AgentState) -> Command[Literal["supervisor"]]:
+        """
+        Wrapper node that executes the risk debate subgraph.
+        The subgraph handles debate state updates, so we only need to update sender.
+        """
         result = risk_graph.invoke(state)
+
+        # Subgraph already updated risk_debate_state and final_trade_decision
         return Command(
             goto="supervisor",
-            update={
-                "risk_debate_state": result.get("risk_debate_state", state["risk_debate_state"]),
-                "final_trade_decision": result.get(
-                    "final_trade_decision", state.get("final_trade_decision", "")
-                ),
-                "messages": result.get("messages", []),
-                "sender": "risk",
-            },
+            update={"sender": "risk"}
         )
 
     return risk_team_node

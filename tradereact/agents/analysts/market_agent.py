@@ -4,13 +4,18 @@ from langgraph.types import Command
 
 from tradereact.agents.utils.agent_states import AgentState
 from tradereact.agents.utils.agent_utils import get_indicators, get_stock_data
+from tradereact.agents.utils.mcp_loader import load_analyst_tools
 
 
 def create_market_analyst(llm: BaseChatModel):
-    tools = [
+    # Define custom tools
+    custom_tools = [
         get_stock_data,
         get_indicators,
     ]
+
+    # Load custom tools + MCP tools (if configured)
+    tools = load_analyst_tools("market_analyst", custom_tools)
 
     def market_analyst_node(state: AgentState):
         current_date = state["trade_date"]
@@ -79,10 +84,7 @@ def create_market_analyst(llm: BaseChatModel):
 
         return Command(
             goto="analyst_supervisor",
-            update={
-                "market_report": report,
-                "sender": "market_node",
-            }
+            update={"market_report": report}
         )
 
     return market_analyst_node

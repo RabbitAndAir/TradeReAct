@@ -1,12 +1,11 @@
 """
-Analyst 子图模块
-将四个分析师（Market, News, Social Media, Fundamentals）并行执行并整合结果
+Analyst subgraph module
+Executes four analysts (Market, News, Social Media, Fundamentals) in serial or parallel mode
 """
 
-from typing import Literal, Optional
+from typing import Literal
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import RemoveMessage, SystemMessage
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, START
 from langgraph.types import Command
 
 from tradereact.agents.supervisor.supervisor import analyst_supervisor_node
@@ -42,15 +41,15 @@ def create_analyst_node(llm: BaseChatModel):
     export_graph(analyst_graph, name="analyst_subgraph")
 
     def analyst_node(state: AgentState) -> Command[Literal["supervisor"]]:
+        """
+        Wrapper node that executes the analyst subgraph and returns to main supervisor.
+        The subgraph handles all report generation, so we only need to update sender.
+        """
         result = analyst_graph.invoke(state)
+
+        # Subgraph already updated all report fields, just mark completion
         return Command(
             goto="supervisor",
-            update={
-                "market_report": result.get("market_report", ""),
-                "news_report": result.get("news_report", ""),
-                "sentiment_report": result.get("sentiment_report", ""),
-                "fundamentals_report": result.get("fundamentals_report", ""),
-                "sender": "analyst",
-            },
+            update={"sender": "analyst"},
         )
     return analyst_node

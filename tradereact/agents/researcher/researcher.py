@@ -41,19 +41,16 @@ def create_researcher_node(
     export_graph(research_graph, name="researcher_subgraph")
 
     def researcher_node(state: AgentState) -> Command[Literal["supervisor"]]:
+        """
+        Wrapper node that executes the researcher debate subgraph.
+        The subgraph handles debate state updates, so we only need to update sender.
+        """
         result = research_graph.invoke(state)
+
+        # Subgraph already updated investment_debate_state and investment_plan
         return Command(
             goto="supervisor",
-            update={
-                "investment_debate_state": result.get(
-                    "investment_debate_state", state["investment_debate_state"]
-                ),
-                "investment_plan": result.get(
-                    "investment_plan", state.get("investment_plan", "")
-                ),
-                "messages": result.get("messages", []),
-                "sender": "researcher",
-            },
+            update={"sender": "researcher"},
         )
 
     return researcher_node

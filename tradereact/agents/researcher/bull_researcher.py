@@ -61,11 +61,7 @@ Use this information to deliver a compelling bull argument, refute the bear's co
             "count": investment_debate_state.get("count", 0) + 1,
         }
         return Command(
-            update={
-                "investment_debate_state": new_investment_debate_state,
-                "messages": [("ai", argument)],
-                "sender": "bull"
-            },
+            update={"investment_debate_state": new_investment_debate_state},
             goto="research_supervisor"
         )
     return bull_node

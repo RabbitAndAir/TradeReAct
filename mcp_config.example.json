@@ -1,0 +1,31 @@
+{
+  "mcpServers": {
+    "market_analyst": {
+      "enabled": true,
+      "description": "Provides an interface for Chinese stock market data.",
+      "servers": {
+        "china-stock-mcp": {
+          "url": "https://mcp.api-inference.modelscope.net/2334ad93fd4b44/mcp",
+          "transport": "streamable_http"
+        }
+      }
+    },
+    "news_analyst": {
+      "enabled": false,
+      "description": "News analyst can fetch content from specific news websites",
+      "servers": {
+        "bing-cn-mcp-server": {
+          "url": "https://mcp.api-inference.modelscope.net/3ead3951689e4f/mcp",
+          "transport": "streamable_http"
+        }
+      }
+    }
+  },
+  "_comments": {
+    "usage": "Set 'enabled: true' to activate MCP tools for specific analysts",
+    "env_vars": "Use ${VAR_NAME} syntax to reference environment variables",
+    "transport": "Use 'stdio' for local subprocess communication, 'streamable_http' for HTTP servers",
+    "testing": "Run 'python -m tradereact.agents.utils.mcp_loader' to test configuration"
+  }
+}
+

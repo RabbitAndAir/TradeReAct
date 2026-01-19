@@ -4,10 +4,15 @@ from langgraph.types import Command
 
 from tradereact.agents.utils.agent_states import AgentState
 from tradereact.agents.utils.agent_utils import get_global_news, get_news
+from tradereact.agents.utils.mcp_loader import load_analyst_tools
 
 
 def create_news_analyst(llm: BaseChatModel):
-    tools = [get_news, get_global_news]
+    # Define custom tools
+    custom_tools = [get_news, get_global_news]
+
+    # Load custom tools + MCP tools (if configured)
+    tools = load_analyst_tools("news_analyst", custom_tools)
 
     def news_analyst_node(state: AgentState):
         current_date = state["trade_date"]
@@ -46,10 +51,7 @@ def create_news_analyst(llm: BaseChatModel):
 
         return Command(
             goto="analyst_supervisor",
-            update={
-                "news_report": report,
-                "sender": "news_node",
-            }
+            update={"news_report": report}
         )
 
     return news_analyst_node

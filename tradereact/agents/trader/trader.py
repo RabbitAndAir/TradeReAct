@@ -1,6 +1,3 @@
-import functools
-import time
-import json
 from typing import Literal
 
 from langgraph.types import Command
@@ -9,7 +6,11 @@ from tradereact.agents.utils.agent_states import AgentState
 
 
 def create_trader_node(llm, memory):
-    def trader_node(state:AgentState, name) -> Command[Literal["supervisor"]]:
+    def trader_node(state: AgentState) -> Command[Literal["supervisor"]]:
+        """
+        Trader node that converts investment plan into actionable trading decision.
+        Uses memory to learn from past trading experiences.
+        """
         company_name = state["company_of_interest"]
         investment_plan = state["investment_plan"]
         market_research_report = state["market_report"]
@@ -44,11 +45,10 @@ def create_trader_node(llm, memory):
 
         return Command(
             update={
-                "messages": [result],
                 "trader_investment_plan": result.content,
-                "sender": name,
+                "sender": "trader",
             },
             goto="supervisor",
         )
 
-    return functools.partial(trader_node, name="Trader")
+    return trader_node

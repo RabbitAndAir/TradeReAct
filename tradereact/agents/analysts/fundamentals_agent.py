@@ -9,15 +9,20 @@ from tradereact.agents.utils.agent_utils import (
     get_fundamentals,
     get_income_statement,
 )
+from tradereact.agents.utils.mcp_loader import load_analyst_tools
 
 
 def create_fundamentals_analyst(llm: BaseChatModel):
-    tools = [
+    # Define custom tools
+    custom_tools = [
         get_fundamentals,
         get_balance_sheet,
         get_cashflow,
         get_income_statement,
     ]
+
+    # Load custom tools + MCP tools (if configured)
+    tools = load_analyst_tools("fundamentals_analyst", custom_tools)
 
     def fundamentals_analyst_node(state: AgentState):
         current_date = state["trade_date"]
@@ -60,9 +65,6 @@ def create_fundamentals_analyst(llm: BaseChatModel):
         report = getattr(last_message, "content", str(last_message))
         return Command(
             goto="analyst_supervisor",
-            update={
-                "fundamentals_report": report,
-                "sender": "fundamentals_node",
-            }
+            update={"fundamentals_report": report}
         )
     return fundamentals_analyst_node

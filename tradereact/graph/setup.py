@@ -1,9 +1,7 @@
 from typing import Dict, Any
 from langchain_openai import ChatOpenAI
-from langgraph.graph import END, StateGraph, START
-from langgraph.prebuilt import ToolNode
+from langgraph.graph import StateGraph, START
 
-from tradereact.agents import *
 from tradereact.agents.analysts.analyst import create_analyst_node
 from tradereact.agents.researcher.researcher import create_researcher_node
 from tradereact.agents.risk.risk import create_risk_node
@@ -71,17 +69,18 @@ class GraphSetup:
         # Create workflow
         workflow = StateGraph(AgentState)
 
-        # 添加 supervisor 和 analyst 节点
+        # Add all nodes to the graph
         workflow.add_node("supervisor", supervisor)
         workflow.add_node("analyst", analyst_node)
         workflow.add_node("researcher", researcher_node)
-
         workflow.add_node("trader", trader_node)
-        #Add Risk node
         workflow.add_node("risk", risk_node)
 
-        # START -> supervisor (supervisor 作为入口点)
+        # Set entry point: START -> supervisor
+        # Note: supervisor uses Command(goto=...) for dynamic routing to other nodes
+        # No need to manually add edges between nodes - LangGraph handles this via Command
         workflow.add_edge(START, "supervisor")
+
         # Compile and return
         graph = workflow.compile()
         export_graph(graph, name="tradereact_graph")

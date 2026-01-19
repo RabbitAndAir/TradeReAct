@@ -9,33 +9,48 @@ from tradereact.agents.utils.agent_states import AgentState
 
 
 def make_supervisor_node(members: list[str]):
-    members_lower = [m.lower() for m in members]
+    """
+    Main supervisor node that routes execution through members sequentially.
 
+    Args:
+        members: List of member node names to execute in order
+
+    Returns:
+        supervisor_node function that handles routing logic
+
+    Flow:
+        START -> members[0] -> members[1] -> ... -> members[n] -> END
+    """
+    members_lower = [m.lower() for m in members]
     def supervisor_node(state: AgentState) -> Command[Literal[*members, "__end__"]]:
         sender = (state.get("sender") or "").strip().lower()
+
+        # First call or invalid sender: go to first member
         if not sender or sender == "system" or sender not in members_lower:
             goto = members[0]
-            return Command(goto=goto, update={"next": goto, "sender": "supervisor"})
-
+            return Command(goto=goto, update={"sender": "supervisor"})
+        # Find next member in sequence
         idx = members_lower.index(sender) + 1
+        # All members completed: finish workflow
         if idx >= len(members):
-            return Command(goto=END, update={"next": "FINISH", "sender": "supervisor"})
-
+            return Command(goto=END, update={"sender": "supervisor"})
+        # Route to next member
         goto = members[idx]
-        return Command(goto=goto, update={"next": goto, "sender": "supervisor"})
+        return Command(goto=goto, update={"sender": "supervisor"})
+
     return supervisor_node
+
 
 def analyst_supervisor_node(members: list[str], method: Literal["serial", "parallel"] = "serial"):
     """
-    Analyst Supervisor 节点工厂函数
+    Analyst Supervisor factory function
 
     Args:
-        members: 成员节点列表，如 ["market_node", "news_node", "social_node", "fundamentals_node"]
-        llm: 语言模型实例
-        method: 执行模式，"serial" 串行执行，"parallel" 并行执行
+        members: List of analyst node names (e.g., ["market_node", "news_node", "social_node", "fundamentals_node"])
+        method: Execution mode - "serial" for sequential, "parallel" for concurrent execution
 
     Returns:
-        supervisor_node 函数，用于路由和调度分析师节点
+        supervisor_node function for routing and scheduling analyst nodes
     """
     from langgraph.types import Send
 
@@ -43,63 +58,53 @@ def analyst_supervisor_node(members: list[str], method: Literal["serial", "paral
 
     def supervisor_node(state: AgentState) -> Command[Literal[*members, "__end__"]]:
         """
-        根据执行模式（serial/parallel）调度分析师节点
+        Routes analyst nodes based on execution mode (serial/parallel)
         """
         sender = (state.get("sender") or "").strip().lower()
-        # 并行执行模式：使用 Send 同时发送任务到所有分析师节点
+
+        # Parallel execution mode: Send tasks to all analysts simultaneously
         if method == "parallel":
-            # 如果是第一次进入（sender 为空或来自上层 supervisor）
+            # First entry: dispatch to all members in parallel
             if not sender or sender == "system" or sender not in members_lower:
-                # 使用 Send 并行发送到所有成员节点
                 return Command(
-                    goto=[Send(node, state) for node in members],
-                    update={"sender": "analyst_supervisor"}
+                    goto=[Send(node, state) for node in members]
                 )
-            # 如果所有成员都已完成，检查是否收集到所有报告
-            reports_collected = all([
-                state.get("market_report"),
-                state.get("news_report"),
-                state.get("sentiment_report"),
-                state.get("fundamentals_report")
-            ])
-            if reports_collected:
-                return Command(
-                    goto=END,
-                    update={"next": "FINISH", "sender": "analyst_supervisor"}
-                )
-        # 串行执行模式：按顺序执行各个分析师节点
+            # All members completed: finish subgraph
+            # Note: In parallel mode, all analysts complete before returning here
+            return Command(goto=END)
+
+        # Serial execution mode: Execute analysts sequentially
         else:  # method == "serial"
-            # 如果是第一次进入或来自上层 supervisor
+            # First entry: go to first member
             if not sender or sender == "system" or sender not in members_lower:
                 goto = members[0]
-                return Command(
-                    goto=goto,
-                    update={"next": goto, "sender": "analyst_supervisor"}
-                )
-            # 找到当前发送者的索引，转到下一个节点
+                return Command(goto=goto)
+
+            # Find next member in sequence
             idx = members_lower.index(sender) + 1
 
-            # 如果已经执行完所有成员节点，返回 END
+            # All members completed: finish subgraph
             if idx >= len(members):
-                return Command(
-                    goto=END,
-                    update={"next": "FINISH", "sender": "analyst_supervisor"}
-                )
-            # 转到下一个成员节点
+                return Command(goto=END)
+
+            # Route to next member
             goto = members[idx]
-            return Command(
-                goto=goto,
-                update={"next": goto, "sender": "analyst_supervisor"}
-            )
-        # 默认返回第一个节点
-        return Command(
-            goto=members[0],
-            update={"next": members[0], "sender": "analyst_supervisor"}
-        )
+            return Command(goto=goto)
+
     return supervisor_node
 
 
 def research_supervisor_node(members: list[str], max_turns: int = 2):
+    """
+    Research Supervisor for bull vs bear debate
+
+    Args:
+        members: List of member nodes ["bear_node", "bull_node", "research_manager_node"]
+        max_turns: Maximum debate rounds before forcing manager decision
+
+    Returns:
+        supervisor_node function for routing debate participants
+    """
     members_lower = [m.lower() for m in members]
 
     def _pick(name: str) -> str:
@@ -108,32 +113,55 @@ def research_supervisor_node(members: list[str], max_turns: int = 2):
 
     def supervisor_node(state: AgentState) -> Command[Literal[*members, "__end__"]]:
         debate = state["investment_debate_state"]
-        if debate.get("judge_decision"):
-            return Command(goto=END, update={"next": "FINISH"})
 
+        # If manager has made a decision, finish debate
+        if debate.get("judge_decision"):
+            return Command(goto=END)
+
+        # Count only debaters (exclude manager from count)
         debater_count = len([m for m in members_lower if "manager" not in m]) or 1
+
+        # If debate has reached max turns, call manager for decision
         if debate.get("count", 0) >= max_turns * debater_count and "research_manager_node" in members_lower:
             goto = _pick("research_manager_node")
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto)
 
+        # Route based on who spoke last (detected from current_response prefix)
         current = (debate.get("current_response") or "").strip()
+
+        # Bull spoke last → bear's turn
         if current.startswith("Bull Analyst:") and "bear_node" in members_lower:
             goto = _pick("bear_node")
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto)
+
+        # Bear spoke last → bull's turn
         if current.startswith("Bear Analyst:") and "bull_node" in members_lower:
             goto = _pick("bull_node")
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto)
 
+        # First entry or no valid prefix → start with bull
         if "bull_node" in members_lower:
             goto = _pick("bull_node")
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto)
+
+        # Fallback to first member
         goto = members[0]
-        return Command(goto=goto, update={"next": goto})
+        return Command(goto=goto)
 
     return supervisor_node
 
 
 def risk_supervisor_node(members: list[str], max_turns: int = 3):
+    """
+    Risk Supervisor for risky vs safe vs neutral debate
+
+    Args:
+        members: List of member nodes ["risk_node", "safe_node", "neutral_node", "risk_manager_node"]
+        max_turns: Maximum debate rounds before forcing manager decision
+
+    Returns:
+        supervisor_node function for routing debate participants
+    """
     members_lower = [m.lower() for m in members]
 
     def _pick(name: str) -> str:
@@ -142,29 +170,44 @@ def risk_supervisor_node(members: list[str], max_turns: int = 3):
 
     def supervisor_node(state: AgentState) -> Command[Literal[*members, "__end__"]]:
         debate = state["risk_debate_state"]
-        if debate.get("judge_decision") or (debate.get("latest_speaker") or "").lower() == "judge":
-            return Command(goto=END, update={"next": "FINISH"})
 
+        # If manager has made a decision, finish debate
+        if debate.get("judge_decision") or (debate.get("latest_speaker") or "").lower() == "judge":
+            return Command(goto=END)
+
+        # Count only debaters (exclude manager from count)
         debater_count = len([m for m in members_lower if "manager" not in m]) or 1
+
+        # If debate has reached max turns, call manager for decision
         if debate.get("count", 0) >= max_turns * debater_count and "risk_manager_node" in members_lower:
             goto = _pick("risk_manager_node")
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto)
 
+        # Route based on who spoke last (detected from latest_speaker field)
         latest = (debate.get("latest_speaker") or "").lower().strip()
+
+        # Risky spoke last → safe's turn
         if latest == "risky" and "safe_node" in members_lower:
             goto = _pick("safe_node")
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto)
+
+        # Safe spoke last → neutral's turn
         if latest == "safe" and "neutral_node" in members_lower:
             goto = _pick("neutral_node")
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto)
+
+        # Neutral spoke last → risky's turn
         if latest == "neutral" and "risk_node" in members_lower:
             goto = _pick("risk_node")
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto)
 
+        # First entry or no valid speaker → start with risky
         if "risk_node" in members_lower:
             goto = _pick("risk_node")
-            return Command(goto=goto, update={"next": goto})
+            return Command(goto=goto)
+
+        # Fallback to first member
         goto = members[0]
-        return Command(goto=goto, update={"next": goto})
+        return Command(goto=goto)
 
     return supervisor_node
