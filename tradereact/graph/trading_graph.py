@@ -203,3 +203,21 @@ class TradingAgentsGraph:
             "w",
         ) as f:
             json.dump(self.log_states_dict, f, indent=4)
+
+    def reflect_and_remember(self, returns_losses):
+        """Reflect on decisions and update memory based on returns."""
+        self.reflector.reflect_bull_researcher(
+            self.curr_state, returns_losses, self.bull_memory
+        )
+        self.reflector.reflect_bear_researcher(
+            self.curr_state, returns_losses, self.bear_memory
+        )
+        self.reflector.reflect_trader(
+            self.curr_state, returns_losses, self.trader_memory
+        )
+        self.reflector.reflect_invest_judge(
+            self.curr_state, returns_losses, self.invest_judge_memory
+        )
+        self.reflector.reflect_risk_manager(
+            self.curr_state, returns_losses, self.risk_manager_memory
+        )
